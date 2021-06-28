@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 '''moldl: Molecular Structure Downloader
 Written by Vikram Kashyap, starting Autumn 2020'''
 
@@ -14,10 +12,23 @@ import json
 import glob
 import random
 from pathlib import Path
+from copy import copy
 
 ##########################################
 # Utility Functions
 ##########################################
+
+PERIODIC_TABLE = \
+	['H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne',
+	'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar', 'K', 'Ca', 'Sc', 'Ti', 'V',
+	'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn', 'Ga', 'Ge', 'As', 'Se', 'Br',
+	'Kr', 'Rb', 'Sr', 'Y', 'Zr', 'Nb', 'Mo', 'Tc', 'Ru', 'Rh', 'Pd', 'Ag',
+	'Cd', 'In', 'Sn', 'Sb', 'Te', 'I', 'Xe', 'Cs', 'Ba', 'La', 'Ce', 'Pr',
+	'Nd', 'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm', 'Yb', 'Lu',
+	'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au', 'Hg', 'Tl', 'Pb', 'Bi',
+	'Po', 'At', 'Rn', 'Fr', 'Ra', 'Ac', 'Th', 'Pa', 'U', 'Np', 'Pu', 'Am',
+	'Cm', 'Bk', 'Cf', 'Es', 'Fm', 'Md', 'No', 'Lr', 'Rf', 'Db', 'Sg', 'Bh',
+	'Hs', 'Mt', 'Ds ', 'Rg ', 'Cn ', 'Nh', 'Fl', 'Mc', 'Lv', 'Ts', 'Og']
 
 def getatomicnum(element):
 	'''
@@ -29,65 +40,65 @@ def getatomicnum(element):
 		Returns:
 			atomic number of element (int)
 	'''
-	TABLE =
-		['h', 'he', 'li', 'be', 'b', 'c', 'n', 'o', 'f', 'ne', 'na', 'mg',
-		'al', 'si', 'p', 's', 'cl', 'ar', 'k', 'ca', 'sc', 'ti', 'v', 'cr',
-		'mn', 'fe', 'co', 'ni', 'cu', 'zn', 'ga', 'ge', 'as', 'se', 'br', 'kr',
-		'rb', 'sr', 'y', 'zr', 'nb', 'mo', 'tc', 'ru', 'rh', 'pd', 'ag', 'cd',
-		'in', 'sn', 'sb', 'te', 'i', 'xe', 'cs', 'ba', 'la', 'ce', 'pr', 'nd',
-		'pm', 'sm', 'eu', 'gd', 'tb', 'dy', 'ho', 'er', 'tm', 'yb', 'lu', 'hf',
-		'ta', 'w', 're', 'os', 'ir', 'pt', 'au', 'hg', 'tl', 'pb', 'bi', 'po',
-		'at', 'rn', 'fr', 'ra', 'ac', 'th', 'pa', 'u', 'np', 'pu', 'am', 'cm',
-		'bk', 'cf', 'es', 'fm', 'md', 'no', 'lr', 'rf', 'db', 'sg', 'bh', 'hs',
-		'mt', 'ds ', 'rg ', 'cn ', 'nh', 'fl', 'mc', 'lv', 'ts', 'og']
+
 	# If argument is already int, assume it is atomic num and pass back
 	if type(element) is int:
-		return element
+		if element > 0 and element < len(PERIODIC_TABLE):
+			return element
+		else:
+			raise ValueError("Invalid atomic number")
 	# If string, find in list of element symbols
 	elif type(element) is str:
 		try:
-			return TABLE.index(str.lower())
+			return PERIODIC_TABLE.index(element.capitalize())+1
 		except:
-			raise ValueError("Invalid element symbol string")
+			raise ValueError("Invalid element symbol")
 	# Perhaps in future allow identification by other types?
 	else:
 		raise TypeError( \
-			"Elements can only be identified by atomic number of symbol")
+			"Elements can only be identified by atomic number or symbol")
+
+
+def getelementsymbol(element):
+	if type(element) is int:
+		try:
+			return PERIODIC_TABLE[element-1]
+		except:
+			raise ValueError("Invalid atomic number")
+	elif type(element) is str:
+		if element.capitalize() in PERIODIC_TABLE:
+			return element.capitalize()
+		else:
+			raise ValueError("Invalid element symbol")
+	else:
+		raise TypeError( \
+			"Elements can only be identified by atomic number or symbol")
 
 ##########################################
 # Core Classes
 ##########################################
 
-class Atom:
+
+class PropertyBlob:
 	'''
-	Represents an individual atom in a molecule.
-	This is a mostly hollow object because all actual data is stored in the related Molecule.
-	Atom objects should only be created by a Molecule object
-
-		Attributes:
-			aid (int): atom ID unique within molecule
-			element (int): atomic number of atom
-			bonds ([Bond]): list of Bonds that Atom is part of
+	Contains properties and ID
+	Superclass of Atom, Bond, and Molecule
 	'''
+	def __init__(self, **kwargs):
+		self._setattribute('_properties', {})
+		for key in kwargs.keys():
+			self.__setattr__(key, kwargs[key])
 
-	def __init__(self, molecule, aid):
-		'''
-		Define atom by the molecule it is contained in and its atom ID within molecule
 
-			Parameters:
-				molecule (Molecule): Molecule object that contains atom
-				aid (int): Atom ID within molecule
+	@property
+	def properties(self):
+		return copy(self._properties)
 
-			Returns:
-				Object representing atom in molecule (Atom)
-		'''
-		self.molecule = molecule
-		self.aid = aid
-		self.element = molecule.getelement(self.aid)
 
 	def __getattr__(self, key):
 		'''
-		Get attributes of Atom that should be generated on demand (bonds)
+		Get attributes of Atom
+		either directly from properties dictionary or aliased
 
 			Paramters:
 				key (str): name of attribute
@@ -95,70 +106,105 @@ class Atom:
 			Returns:
 				attribute corresponding to key
 		'''
-		if key == 'bonds':
-			self.bonds = self._genBonds()
-			return self.bonds
-		else:
-			raise AttributeError('Invalid Bond object attribute')
+		return self.getProperty(key)
 
-	def _genBonds(self):
+	def __setattr__(self, key, val):
 		'''
-		Get a list of Bond objects representing the bonds this atom has
+		Set attributes of Atom
+		either directly through properties dictionary or aliased
+
+			Paramters:
+				key (str): name of attribute
+				val: value of attribute
+
+			Returns:
+				None
 		'''
+		if key == '_properties': super().__setattr__(key, val)
+		else: self.setProperty(key, val)
 
-		bids = self.molecule.getBonds(self.molecule.getbondsbyatom(aid=self.aid))
+
+	def __eq__(self, other):
+		if self.id == None or other.id == None: return self is other
+		return self.id == other.id
 
 
-class Bond:
+	def getProperty(self, key):
+		if key in self._properties: return self._properties[key]
+		else: return None
+
+
+	def setProperty(self, key, val):
+		self._properties[key] = val
+
+
+	def _setattribute(self, key, val):
+		object.__setattr__(self, key, val)
+
+class Atom(PropertyBlob):
 	'''
-	Represents a bond between Atoms
-	This is a mostly hollow object because all actual data is stored in the related Molecule
-	Bond objects should only be created by a Molecule or Atom object
+	Represents an individual atom in a molecule
+
+		Attributes:
+			element (int): atomic number of atom
+			bonds ([Bond]): list of Bonds that Atom is part of
 	'''
-	def __init__(self, molecule, aid, bid):
-		self.molecule = molecule
-		self.bid = bid
-		self.record = molecule.struct['bonds'][bid]
-		self.order = molecule.struct['bonds'][bid]['order']
+
+	def __init__(self, element=None, **kwargs):
+		'''
+		Define atom by the molecule it is contained in and its atom ID within molecule
+
+			Parameters:
+
+			Returns:
+				Object representing atom in molecule (Atom)
+		'''
+		super().__init__(**kwargs)
+		if element is not None:
+			self.element = getatomicnum(element)
 
 
-	def partnerof(self, atom):
-		if self.record['atoms'][0] == atom.aid:
-			return Atom(self.molecule, self.record['atoms'][1])
-		elif self.record['atoms'][1] == atom.aid:
-			return Atom(self.molecule, self.record['atoms'][0])
-		else:
-			return ValueError('Passed Atom is not part of Bond')
+class Bond(PropertyBlob):
+	def __init__(self, atom1, atom2, **kwargs):
+		'''
+		Represents a bond between Atoms
+
+			Parameters:
+				atom1 (Atom): one Atom in bond
+				atom2 (Atom): other Atom in bond
+
+			Returns:
+				Object representing bond between atom1 and atom2
+		'''
+		super().__init__(**kwargs)
+		self._setattribute('_atoms', (atom1, atom2))
 
 	@property
-	def order(self):
-		return self.record['order']
+	def atoms(self):
+		return copy(self._atoms)
 
-	@order.setter
-	def order(self, value):
-		self.record
+	def partnerof(self, atom):
+		if self._atoms[0] is atom:
+			return self._atoms[1]
+		elif self._atoms[1] is atom:
+			return self._atoms[0]
+		else:
+			return ValueError('Given Atom is not part of Bond')
 
-	def __getattr__(self, key):
-		if key == 'order':
 
 
-class Molecule:
+
+class Molecule(PropertyBlob):
 	'''
 	Represents a certain molecule and stores its properties as attributes
 
 		Attributes:
-			cid (int): PubChem CID of molecule
-			id ({}): dictionary of identifiers
-			struct ({}): dictionary of structural information
-			chem ({}): dictionary of chemical information
 	'''
 
-	def __init__(self, cid, properties=None, download=True):
+	def __init__(self, id, bonds=[], **kwargs):
 		'''
-		Define molecule by CID
-
+			Define Molecule by name
 			Parameters:
-				cid (int): PubChem CID
 				properties ({}): properly JMF formatted dictionary of properties
 				download (bool): whether to download from PubChem
 						if no properties passed (only set False if you know
@@ -167,191 +213,157 @@ class Molecule:
 			Returns:
 				Molecule object
 		'''
-		self.cid = cid
-		if properties is not None:
-			self.__dict__ = properties
-		elif download:
-			self.download()
+		super().__init__(**kwargs)
+		self.id = str(id)
+		self._setattribute('_bonds', [])
+		self._setattribute('_atoms', [])
+		self._setattribute('_bidcounter', 0)
+		self._setattribute('_aidcounter', 0)
+		for bond in bonds: self.addBond(bond)
 
-	def download(self):
+
+	@staticmethod
+	def from_jmf(f):
+		jmf = json.load(f)
+		atoms = {}
+		for a in jmf['atoms']:
+			atom = Atom()
+			for property in a.keys():
+				atom.setProperty(property, a[property])
+			atoms[atom.id] = atom
+		bonds = []
+		for b in jmf['bonds']:
+			bond = Bond(atoms[b['aids'][0]], atoms[b['aids'][1]])
+			for property in b.keys():
+				bond.setProperty(property, b[property])
+			bonds.append(bond)
+		mol = Molecule(jmf['id'], bonds)
+		jmf.pop('atoms')
+		jmf.pop('bonds')
+		for property in jmf.keys():
+			mol.setProperty(property, jmf[property])
+		return mol
+
+	@staticmethod
+	def from_cid(cid):
 		'''
-		Load properties of molecule from PubChem online database
-
-			Parameters:
-				None
-
-			Returns:
-				True if properly loaded, else False
+		Create Molecule by retrieving information from PubChem by CID
 		'''
-		# Fetch record from PubChem in JSON format, return False if record not found
-		record = pcp.get_json(self.cid, record_type='3d')['PC_Compound'][0]
-		if record is None: return False
-		self.pcrecord = record
+		try:
+			pcpcompound = pcp.Compound.from_cid(cid, record_type='3d')
+		except Exception:
+			return None
+		# Fail if 3d compound not available
+		# TODO: put option to include 2d only structures
+		if pcpcompound.atoms[0].z is None:
+			return None
+		atoms = {}
+		for pcpatom in pcpcompound.atoms:
+			a = Atom(pcpatom.number)
+			a.coords = [pcpatom.x, pcpatom.y, pcpatom.z]
+			a.formalcharge = pcpatom.charge
+			a.coordinate_type = pcpatom.coordinate_type
+			atoms[pcpatom.aid] = a
+		bonds = []
+		for pcpbond in pcpcompound.bonds:
+			b = Bond(atoms[pcpbond.aid1], atoms[pcpbond.aid2])
+			b.order = pcpbond.order
+			bonds.append(b)
+		# TODO: Submit fix to pubchempy bug that crashes to_dict() on 3d structures
+		properties = pcp.Compound.from_cid(cid, record_type='2d').to_dict()
+		properties.pop('atoms')
+		properties.pop('bonds')
+		mol = Molecule(cid, bonds, **properties)
+		return mol
 
-		# Extract properties from PubChem record
-		# Hardcoded since PubChem record system is a mess. Hopefully they don't change their format
-
-		# Top level layout
-		self.id = {}	# Identifying information
-		self.struct = {}	# Structure information
-		self.chem = {}	# Chemical information
-
-		# Import ID/Aliases of molecules
-		self.id['cid'] = self.cid
-		#TODO other ids
-
-		# Import structure
-		coords = record['coords'][0]['conformers'][0]
-		self.struct['atoms'] = []
-		for e, x, y, z in zip(record['atoms']['element'], coords['x'], coords['y'], coords['z']):
-			atom = {'element': e,
-				'coord': (x, y, z)}
-			self.struct['atoms'].append(atom)
-		self.struct['bonds'] = []
-		for a1, a2, order in zip(record['bonds']['aid1'], record['bonds']['aid2'], record['bonds']['order']):
-			bond = {'atoms': (a1, a2),
-				'order': order}
-			self.struct['bonds'].append(bond)
-
-		# Derive structure properties
-		self._derivestructproperties()
-
-		# TODO Import chemical properties
-
-		# Set attributes
-		self.atoms = list(range(len(self.struct['atoms'])))
-		self.bonds = list(range(len(self.struct['bonds'])))
-		self.elements = self.struct['deriv']['elements']
-
-	def getAtom(self, aid):
-		return Atom(self, aid)
+	@property
+	def atoms(self):
+		return copy(self._atoms)
 
 
-	def getAtoms(self, element=None):
-		return [self.getAtom(self, aid) for aid in self.atomsbyelement(element)]
+	@property
+	def bonds(self):
+		return copy(self._bonds)
 
 
-	def getBond(self, bid, aid):
-		return Bond(self, aid, bid)
+	def addBond(self, bond):
+		if bond in self.bonds: return
+		bond.id = self._bidcounter
+		self._setattribute('_bidcounter', self._bidcounter+1)
+		self._bonds.append(bond)
+		self._addAtom(bond.atoms[0])
+		self._addAtom(bond.atoms[1])
+		#self._bondpropertymaps['Atom'][bond.atoms[0]].add(bond)
+		#self._bondpropertymaps['Atom'][bond.atoms[1]].add(bond)
 
 
-	def getBonds(self, group):
-		if isinstance(group, Atom):
+	def _addAtom(self, atom):
+		if atom not in self.atoms:
+			atom.id = self._aidcounter
+			self._setattribute('_aidcounter', self._aidcounter+1)
+			self._atoms.append(atom)
+			#self._atompropertymaps['element'][atom.element].add(atom)
 
 
-	def getelement(self, aid):
+	def getAtoms(self, **kwargs):
 		'''
-		Get atomic number of atom by Atom ID
-
-			Parameters:
-				aid (int): Atom ID within molecule
-
-			Returns:
-				atomic number of atom (int)
+		Get a list of atoms in molecule filtered to match a set of properties
 		'''
-		return self.struct['atoms'][aid]['element']
+		atoms = []
+		for atom in self.atoms:
+			selected = True
+			for key in kwargs.keys():
+				val = kwargs[key]
+				if atom.getProperty(key) != val: selected = False
+			if selected: atoms.append(atom)
+		return atoms
 
 
-	def getbondorder(self, bid):
-		'''
-		Get bond order of bond by Bond ID
-
-			Parameters:
-				bid (int): Bond ID within molecule
-
-			Returns:
-				order of bond (int)
-		'''
-		return self.struct['bonds'][bid]['order']
-
-
-	def getbondpartner(self, bid, aid):
-		b = _getbond(bid)
-		if b[0] == aid: return b[1]
-		if b[1] == aid: return b[0]
-		else: return None
+	def getBonds(self, atom=None, **kwargs):
+		bonds = []
+		for bond in self.bonds:
+			selected = True
+			if atom is None or atom in bond.atoms:
+				for key in kwargs.keys():
+					val = kwargs[key]
+					if bond.key != val: selected = False
+			else: selected = False
+			if selected: bonds.append(bond)
+		return bonds
 
 
-	def atomsbyelement(self, element):
-		'''
-		Get list of atom IDs by element
-
-			Parameters:
-				element (int or str): atomic number or symbol of element
-
-			Returns:
-				list of atom IDs for atoms in molecules of element
-		'''
-		return self.struct['deriv']['aidsbyelement'][getatomicnum(element)]
-
-	def bondsbyatom(self, aid):
-		'''
-		Get list of bond IDs by atom ID
-
-			Parameters:
-				aid (int): atom ID to get bonds for
-
-			Returns:
-				list of bond IDs for bonds that involve given aid ([int])
-		'''
-		return self.struct['deriv']['bidsbyaid']
+	def to_json(self):
+		moldict = self.properties
+		moldict['atoms'] = []
+		for atom in self.atoms:
+			moldict['atoms'].append(atom.properties)
+		moldict['bonds'] = []
+		for bond in self.bonds:
+			bonddict = bond.properties
+			bonddict['aids'] = (bond.atoms[0].id, bond.atoms[1].id)
+			moldict['bonds'].append(bonddict)
+		return json.dumps(moldict, indent=4)
 
 
-	def _getbond(self, bid):
-		'''
-		Get a reference to the dictionary for a bond
+	def to_xyz(self):
+		return Molecule.jmf_to_xyz(self.to_json())
 
-			Parameters:
-				bid (int): Bond ID within molecule
-
-			Returns:
-				reference to dictionary within molecule that represents bond
-		'''
-		return self.struct['bonds'][bid]
-
-
-	def _derivestructproperties(self):
-		'''
-		Calculate properties from core information
-		Populates Molecule.struct:'deriv'
-
-			Parameters:
-				None
-			Returns:
-				None (int)
-		'''
-
-		# Make derived properties dictionary
-		self.struct['deriv'] = {}
-
-		# Sort atoms by element and generate list of elements in molecule
-		atomsbyelement = {}
-		elements = set()
-		for aid in self.atoms():
-			e = self.elementof(aid)
-			elements.add(e)
-			if e in aidsbyelement:
-				aidsbyelement[e].append(aid)
-			else:
-				aidsbyelement[e] = [aid]
-		self.struct['deriv']['aidsbyelement'] = aidsbyelement
-		self.struct['deriv']['elements'] = elements
-
-		# Sort bonds by atom
-		bidsbyaid = [[]]*len(self.getatoms())
-		for bid in self.getbonds():
-			aids = self._getbond(bid)['atoms']
-			bidsbyaid[aids[0]].append(bid)
-			bidsbyaid[aids[1]].append(bid)
-		self.struct['deriv']['bidsbyaid'] = bidsbyaid
-
+	@classmethod
+	def jmf_to_xyz(cls, jmf):
+		jmf = json.loads(jmf)
+		xyz = str(len(jmf['atoms']))
+		xyz += "\n\n"
+		for atom in jmf['atoms']:
+			xyz += f"{getelementsymbol(atom['element'])}\t" + \
+			f"{atom['coords'][0]}\t{atom['coords'][1]}\t{atom['coords'][2]}\n"
+		return xyz
 
 class MolDB:
 	'''
 	Represents a database of molecules
 	'''
 
-	def __init__(self, path):
+	def __init__(self, path, molecules=[]):
 		'''
 		Define database
 
@@ -362,9 +374,32 @@ class MolDB:
 				nothing
 		'''
 		self.path = Path(path)
-		self.cids = self.path.glob('*.json')
+		if not self.path.exists():
+			self.path.mkdir()
+		self.molecules = [str(file.name).rstrip('.jmf') \
+		 	for file in self.path.glob('*.jmf')]
+		self._loadedmols = {}
+		for mol in molecules:
+			self.addMolecule(mol)
 
-	def getcids(filters):
+	def getMolecule(self, id):
+		if id in self._loadedmols:
+			return self._loadedmols[id]
+		else:
+			mol = Molecule.from_jmf((self.path/(f"{id}.jmf")).open('r'))
+			self._loadedmols[mol.id] = mol
+			return mol
+
+	def addMolecule(self, mol):
+		if mol.name in self.molecules:
+			raise ValueError('Molecule already exists in database')
+		else:
+			self._loadedmols.append(mol)
+			mol.save(self.path/(mol.id+'.jmf'))
+			self.molecules.append(mol.id)
+
+
+	def filter(self, filters):
 		'''
 		Return list of cids present in database that pass given filters
 
@@ -374,40 +409,76 @@ class MolDB:
 			Returns:
 				list of cids ([int])
 		'''
-		cids = self.cids
-		for molfilter in filters:
-			cids = filter(molfilter.check, cids)
-		return list(cids)
+		filteredids = []
+		for id in self.molecules:
+			mol = self.getMolecule(id)
+			passed = True
+			for molfilter in filters:
+				if molfilter.check(mol) is False:
+					passed = False
+					break
+			if passed:
+				filteredids.append(id)
+		return filteredids
 
 
-	def filtermolecs:
+	def save(self, mol):
+		data = mol.to_json()
+		path = self.path/f"{mol.cid}.jmf"
+		with path.open('w') as f:
+			f.write(data)
 
-
-
-	def getmolecules(filters):
+	def extract(self, ids, path, format='xyz'):
 		'''
-		Get list of initialized Molecule objects from database that pass given filters
+		Save moleculuar structures in various formats
+		'''
+
+		path = Path(path)
+		if not path.exists():
+			path.mkdir()
+		for id in ids:
+			data = self.getMolecule(id).to_xyz()
+			with (path/f"{id}.xyz").open('w') as f:
+				f.write(data)
+
+
+	def searchPubChem(self, searchterm='', filters=[], numresults=10,\
+		randomized=True, save=True):
+		'''
+		Get list of initialized Molecule cids from database that pass given filters
 
 			Parameters:
 				filters ([Filter]): list of filters to apply
 
 			Returns:
-				list of molecules ([Molecule])
+				list of cids ([int])
 		'''
-		cids = self.getcids(filters)
-		molecs = []
-		for cid in cids:
-			try:
+		#Retrieve search results from PubChem
+		searchcids = \
+			pcp.get_cids(searchterm , namespace='smiles', \
+			searchtype='substructure', MaxRecords=10000, record_type='3d')
+		if randomized: random.shuffle(searchcids)
 
+		results = []
+		for cid in searchcids:
+			if len(results) == numresults: break
+			if str(cid) in self.molecules: continue
+			print(f"fetching molecule {cid}")
+			mol = Molecule.from_cid(cid)
+			if mol is None: continue
+			print("saving")
+			self.save(mol)
+			passed = True
+			for molfilter in filters:
+				if not molfilter.check(mol):
+					passed = False
+					break
+			if passed:
+				print('passed')
+				results.append(mol.id)
 
-	def add(*molecules):
-		for cid in cids:
-			m = Molecule(cid)
-			m.load()
-			m.
+		return results
 
-	def getmolecule(cid):
-		pass
 
 #####################################
 # Filters
@@ -418,273 +489,53 @@ class MoleculeFilter:
 	'''
 	Abstract superclass of all filters (Do not instantiate)
 	'''
-	def check(mol):
+	def check(self, mol):
 		'''
 		Check if molecule passes filter
 		'''
 		return False
+
 
 class AtomCountFilter(MoleculeFilter):
 	'''
 	Filter for molecules based on number of atoms/atoms of a certain element
 	'''
 
-	def __init__(locount, hicount, element=None){
+	def __init__(self, locount, hicount, element=None):
 		self.locount = locount
 		self.hicount = hicount
-		self.element = getatomicnum(element)
-	}
+		if element is not None:
+			self.element = getatomicnum(element)
+		else: self.element = None
 
-	def check(mol):
-		count = len(mol.getAtoms(element=self.element))
-		return count >= locount and count <= hicount
+
+	def check(self, mol):
+		if self.element == None: count = len(mol.getAtoms())
+		else: count = len(mol.getAtoms(element=self.element))
+		return count >= self.locount and count <= self.hicount
+
 
 class BondedElementFilter(MoleculeFilter):
 	'''
 	Filter for molecules based on bonded elements
 	'''
 
-	def __init__(element, allowed):
-		self.element = element
+	def __init__(self, element, allowed):
+		self.element = getatomicnum(element)
 		self.allowed = [getatomicnum(e) for e in allowed]
 
-	def check(mol):
+	def check(self, mol):
 		for atom in mol.getAtoms(element=self.element):
-			for bond in atom.bonds:
+			for bond in mol.getBonds(atom):
 				if bond.partnerof(atom).element not in self.allowed:
 					return False
 		return True
 
 
-#Convert MOL formated structure to XYZ
-def convert_mol_to_xyz(mol_data, compound):
-	lines = mol_data.split(b'\n')
+class BondCountFilter(MoleculeFilter):
+	'''
+	Filter molecules based on number of certain type of bond
+	'''
 
-	istart = 0
-	for l in lines:
-		if b'V2000' in l.split() or b'V3000' in l.split():
-			break
-		else:
-			istart = istart + 1
-
-	atomre = re.compile(b'\s+(-?\d+\.\d+)\s+(-?\d+\.\d+)\s+(-?\d+\.\d+)\s+(\w+)\s+')
-	atoms = []
-	for l in lines[istart + 1:]:
-		m = atomre.match(l)
-		if m is not None:
-			atoms.append(m.groups())
-		else:
-			break
-
-	#Generate names
-	namesrecorded = 0
-	names = b''
-	while (namesrecorded < 3 and namesrecorded < len(compound.synonyms)):
-		names += (str.encode(compound.synonyms[namesrecorded]) + b',')
-		namesrecorded += 1
-	names = names[:-1]
-
-	xyz_data = str(len(atoms)).encode() + b'\n' + names + b'\n'
-	atomcoords = [(a[-1] + b'\t' + a[0] + b'\t' + a[1] + b'\t' + a[2]) for a in atoms]
-	xyz_data += b'\n'.join(atomcoords) + b'\n'
-
-	return xyz_data
-
-
-#Convert SDF formatted structure to MOL
-def convert_sdf_to_mol(sdf_data, compound):
-	linenum = 1
-	i = 0
-	while (linenum < 3):
-		if (sdf_data[i] == ord('\n')):
-			linenum+=1
-		i+=1
-
-	#Generate names
-	namesrecorded = 0
-	names = b''
-	while (namesrecorded < 3 and namesrecorded < len(compound.synonyms)):
-		names += (str.encode(compound.synonyms[namesrecorded]) + b',')
-		namesrecorded += 1
-	names = names[:-1]
-
-	mol_data = sdf_data[:i] + names + sdf_data[i:sdf_data.index(b'M  END')+len('M  END\n')]
-
-	return mol_data
-
-
-#Retrieve files in batches from a list of cids. Lowers risk of PUG REST Timeout
-def retrieve_by_cids(cids):
-	compounds = []
-	for cid in cids:
-		print(cid)
-		compounds.append(pcp.Compound.from_cid(cid))
-	return compounds
-
-#Retrieve files
-def retrieve_files(specs, dbpath, filterlist, fileformat='xyz', maxresults=1000):
-	#Load database log
-	try:
-		with open(dbpath/'dblog.json', 'r') as f:
-			dblog = json.load(f)
-	except:
-		print('Local database log not found. Initializing directory as new database.')
-		dblog = {}
-
-	searchterm = specs[0][1]    # Assumed to be first line of specs
-
-	#Retrieve search results from PubChem
-	search_result_cids = pcp.get_cids(searchterm , namespace='smiles', searchtype='substructure', \
-		MaxRecords=100000, record_type='3d')
-
-	if search_result_cids is None:
-		print('Error retrieving search results from PubChem')
-		sys.exit()
-
-	numdownloaded = 0
-	random.shuffle(search_result_cids)
-	shuffledcids = iter(search_result_cids)
-
-	#Filter results
-	while numdownloaded < maxresults:
-		try:
-			cid = shuffledcids.__next__()
-		except:
-			print('Did not achieve maximum requested results')
-			break
-
-		#Check that file not already downloaded
-		#Generate filepath of structure
-		filepath = dbpath/(str(cid)+'.'+fileformat)
-		#Check if already in local db (don't redownload)
-		if filepath.exists():
-			continue
-
-		compound = pcp.Compound.from_cid(cid)
-
-		# Do checks
-		passcheck = True
-		for filterfunc in filterlist:
-			if not filterfunc(specs, compound):
-				passcheck = False
-				break
-
-		if passcheck:
-			#Convert to correct format and save based on format
-			print('Saving ' + str(compound.cid))
-			#Retrieve SDF from PubChem
-			try:
-				file_data = pcp.get(compound.cid, output='SDF', record_type='3d')
-			except Exception as e:
-				print(e)
-				continue
-
-			if file_data is None:
-				print(f"Could not download SDF for {compound.cid}")
-				continue
-
-			#Apply any requested format conversions
-			if (fileformat.lower() == 'mol'):
-				file_data = convert_sdf_to_mol(file_data, compound)
-			elif (fileformat.lower() == 'xyz'):
-				file_data = convert_mol_to_xyz(convert_sdf_to_mol(file_data, compound), compound)
-
-			#Write file
-			with open(filepath, 'wb') as f:
-				f.write(file_data)
-
-			#Add 3 most common names with CID to database log
-			numnames = 0
-			while (numnames < 3 and numnames < len(compound.synonyms)):
-				dblog[compound.synonyms[numnames].lower()] = compound.cid
-				numnames += 1
-
-			numdownloaded +=1
-
-
-	#Save log file
-	with open(dbpath/'dblog.json', 'w') as f:
-		json.dump(dblog, f)
-
-
-#Lookup CID based on name, first searching local database, then online if not found
-def lookup_cid(args):
-	#Load database log
-	try:
-		with open(args.path+'/dblog.json', 'r') as f:
-			dblog = json.load(f)
-		if args.lookup.lower() in dblog:
-			cid = dblog[args.lookup.lower()]
-			print('CID ' + str(cid) + ': ' + ','.join(glob.glob(args.path+'/'+str(cid)+'.*')))
-			return
-		else:
-			print('"'+args.lookup+'" not found in local database. Searching online...')
-	except:
-		print('Local database log not found.')
-
-	print('Name could correspond to following CIDs and local files (if present):')
-	cids = pcp.get_cids(args.lookup, 'name', 'substance', list_return='flat')
-	if len(cids) == 0: print('None')
-	for cid in cids:
-		 print(str(cid) + ': ' + ','.join(glob.glob(args.path+'/'+str(cid)+'.*')))
-
-
-
-#Main function, parse and handle command line requests
-def main():
-
-	#Parse arguments
-	argparser = argparse.ArgumentParser(description='moldl: Download molecular structure files', \
-		formatter_class = argparse.RawDescriptionHelpFormatter,
-		epilog='Example:\n\t moldl -e P -n 1 -m 5 --path molecules --format mol \n\n \
-		Peace, and happy sciencing.')
-	commandaction = argparser.add_mutually_exclusive_group(required=True)
-	commandaction.add_argument('-l', '--lookup',
-				metavar = 'Name',
-				type=str,
-				help='Compound name to search for in local database or online')
-	commandaction.add_argument('-d', '--download',
-				metavar = 'SpecsFile',
-				type=str,
-				help='Download molecules using specs from file')
-	argparser.add_argument('-m', '--maxresults',
-				metavar = 'MaxResults',
-				type=int,
-				help='maximum number of results to download (will likely not achieve max)',
-				default = 10)
-	argparser.add_argument('-f', '--format',
-				metavar = "Format",
-				type=str,
-				help='file format in which to save structure file (SDF, MOL, XYZ)',
-				choices = ['sdf', 'SDF', 'mol', 'MOL', 'xyz', 'XYZ'],
-				default = 'sdf')
-	argparser.add_argument('-p', '--path',
-				metavar = "Path",
-				type=str,
-				help='path to directory in which to download files (default current dir)',
-				default = os.path.dirname(os.path.realpath(__file__)))
-
-	args = argparser.parse_args()
-
-
-	#Actions
-	#Retrieve files
-	if args.download is not None:
-		filterlist = [check_charge,
-			check_max_size,
-			check_atom_counts,
-			check_bonded_elements,
-			check_num_bonds_between_elements]	#Should put this specs file
-
-		specs = get_specs(Path(args.download))
-		print(specs)
-		retrieve_files(specs, Path(args.path), filterlist,
-			maxresults=args.maxresults, fileformat=args.format.lower())
-
-	#Lookup molecules locally
-	elif args.lookup is not None:
-		lookup_cid(args)
-
-#Run main if called as command
-if __name__ == "__main__":
-	main()
+	def __init__(self, element1, element2):
+		pass
