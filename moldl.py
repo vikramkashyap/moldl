@@ -394,12 +394,34 @@ class MolDB:
 		if mol.name in self.molecules:
 			raise ValueError('Molecule already exists in database')
 		else:
-			self._loadedmols.append(mol)
-			mol.save(self.path/(mol.id+'.jmf'))
+			self._loadedmols[mol.id] = mol
+			self.save(mol)
 			self.molecules.append(mol.id)
 
 
-	def filter(self, filters):
+	def sort(self, sorter, idset=None):
+		'''
+		Sort set of molecules
+
+			Parameters:
+				sorter: callable object taking Molecule, returning value
+				molset: set of molecule ids to be sorted (optional, uses entire database by default)
+
+			Returns:
+				Dictionary mapping classification values to lists of molecule ids
+		'''
+		if idset is None: idset = self.molecules
+		sortedmols = dict()
+		for id in idset:
+			mol = self.getMolecule(id)
+			classification = sorter(mol)
+			if classification in sortedmols:
+				sortedmols[classification].add(mol.id)
+			else:
+				sortedmols[classification] = set([mol.id])
+		return sortedmols
+
+	def filter(self, filters, idset=None):
 		'''
 		Return list of cids present in database that pass given filters
 
@@ -409,18 +431,18 @@ class MolDB:
 			Returns:
 				list of cids ([int])
 		'''
-		filteredids = []
-		for id in self.molecules:
+		if idset is None: idset = self.molecules
+		filteredids = set()
+		for id in idset:
 			mol = self.getMolecule(id)
 			passed = True
 			for molfilter in filters:
-				if molfilter.check(mol) is False:
+				if molfilter(mol) is False:
 					passed = False
 					break
 			if passed:
-				filteredids.append(id)
+				filteredids.add(id)
 		return filteredids
-
 
 	def save(self, mol):
 		data = mol.to_json()
@@ -495,6 +517,7 @@ class MoleculeFilter:
 		'''
 		return False
 
+	__call__ = check
 
 class AtomCountFilter(MoleculeFilter):
 	'''
@@ -507,12 +530,26 @@ class AtomCountFilter(MoleculeFilter):
 		if element is not None:
 			self.element = getatomicnum(element)
 		else: self.element = None
+		self.__call__ = self.check
 
 
 	def check(self, mol):
 		if self.element == None: count = len(mol.getAtoms())
 		else: count = len(mol.getAtoms(element=self.element))
 		return count >= self.locount and count <= self.hicount
+
+
+class ChargeFilter(MoleculeFilter):
+	'''
+	Filter structures by charge
+	'''
+	def __init__(self, acceptedrange):
+		self.acceptedrange = acceptedrange
+
+	def check(self, mol):
+		return mol.charge in self.acceptedrange
+
+	__call__ = check
 
 
 class BondedElementFilter(MoleculeFilter):
@@ -530,6 +567,8 @@ class BondedElementFilter(MoleculeFilter):
 				if bond.partnerof(atom).element not in self.allowed:
 					return False
 		return True
+
+	__call__ = check
 
 
 class BondCountFilter(MoleculeFilter):
