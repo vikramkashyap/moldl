@@ -570,11 +570,3 @@ class BondedElementFilter(MoleculeFilter):
 
 	__call__ = check
 
-
-class BondCountFilter(MoleculeFilter):
-	'''
-	Filter molecules based on number of certain type of bond
-	'''
-
-	def __init__(self, element1, element2):
-		pass
