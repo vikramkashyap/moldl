@@ -6,6 +6,10 @@ Check out the pages linked on the side to learn how to get started with `moldl`.
 
 *Full API documentation coming soon!*
 
+Notes:
+	* When loading molecules from PubChem, any molecule without a 3D structure record in rejected. This will be changed soon to allow for 2D molecules.
+	* Support for MOL and SDF formats is limited. Only atom elements, atom positions, bond atoms, and bond orders are recorded. Other information fields are filled with zeros.
+
 # Installation
 
 Currently, in order to use `moldl` you must download "moldl.py" from [https://raw.githubusercontent.com/vikramkashyap/moldl/master/moldl.py](https://raw.githubusercontent.com/vikramkashyap/moldl/master/moldl.py). Include this file in your python path or the same folder as your python script.

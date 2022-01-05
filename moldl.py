@@ -348,6 +348,22 @@ class Molecule(PropertyBlob):
 	def to_xyz(self):
 		return Molecule.jmf_to_xyz(self.to_json())
 
+	def to_mol(self):
+		molstring = ""
+		molstring += str(self.id) + '\n'
+		molstring += 'MolDL v1.0\n'
+		molstring += '\n'
+		molstring += f"  {len(self.atoms)}  {len(self.bonds)}  0     0  0  0  0  0  0999 V2000\n"
+		for atom in self.atoms:
+			molstring += f"    {atom.coords[0]:.4f}    {atom.coords[1]:.4f}    {atom.coords[2]:.4f}    {getelementsymbol(atom.element)} 0 0 0 0 0 0\n"
+		for bond in self.bonds:
+			molstring += f"  {self.atoms.index(bond.atoms[0])}  {self.atoms.index(bond.atoms[1])}  {bond.order}  0  0  0  0\n"
+		molstring += "M END\n"
+		return molstring
+
+	def to_sdf(self):
+		return self.to_mol()+"$$$$\n"
+
 	@classmethod
 	def jmf_to_xyz(cls, jmf):
 		jmf = json.loads(jmf)
@@ -459,8 +475,11 @@ class MolDB:
 		if not path.exists():
 			path.mkdir()
 		for id in ids:
-			data = self.getMolecule(id).to_xyz()
-			with (path/f"{id}.xyz").open('w') as f:
+			if format.lower()=='xyz': data = self.getMolecule(id).to_xyz()
+			elif format.lower()=='mol': data = self.getMolecule(id).to_mol()
+			elif format.lower()=='sdf': data = self.getMolecule(id).to_sdf()
+			else: raise ValueError(f"Format {format} unsuported")
+			with (path/f"{id}.{format}").open('w') as f:
 				f.write(data)
 
 
